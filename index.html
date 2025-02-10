@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Secure Exam Login</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: linear-gradient(to right, #ff9966, #ff5e62);
+            text-align: center;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+        .login-container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0px 5px 15px rgba(0, 0, 0, 0.3);
+            width: 350px;
+            text-align: left;
+        }
+        h2 { text-align: center; color: #ff5e62; font-size: 24px; transition: 0.3s; }
+        label { font-size: 14px; font-weight: bold; color: #555; display: block; margin-top: 10px; }
+        input {
+            width: 100%;
+            padding: 10px;
+            margin: 8px 0;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            font-size: 16px;
+        }
+        button {
+            width: 100%;
+            background-color: #ff5e62;
+            color: white;
+            border: none;
+            padding: 12px;
+            font-size: 16px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: 0.3s;
+            margin-top: 10px;
+        }
+        button:hover { background-color: #d43f51; }
+        .error, .success {
+            font-size: 14px;
+            margin-top: 10px;
+            text-align: center;
+            font-weight: bold;
+        }
+        .error { color: red; }
+        .success { color: green; }
+        .leaderboard-link {
+            text-align: center;
+            margin-top: 15px;
+            font-size: 16px;
+            display: none;
+        }
+        .leaderboard-link a {
+            color: #ff5e62;
+            text-decoration: none;
+            font-weight: bold;
+        }
+        .leaderboard-link a:hover { text-decoration: underline; }
+    </style>
+    <script>
+        const REDIRECT_URL = "http://littlebearz.wap.sh/Hindi/Quiz%205%20screenshot";
+        const LEADERBOARD_URL = "https://www.google.com";
+        let loginAttempts = localStorage.getItem("login_attempts") || 0;
+
+        async function getDeviceID() {
+            return new Promise((resolve) => {
+                let deviceId = localStorage.getItem("device_id");
+                if (!deviceId) {
+                    deviceId = Math.random().toString(36).substring(2, 15) + Date.now();
+                    localStorage.setItem("device_id", deviceId);
+                }
+                resolve(deviceId);
+            });
+        }
+
+        function getIndianTime() {
+            const options = { timeZone: "Asia/Kolkata", hour12: false, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" };
+            return new Intl.DateTimeFormat("en-GB", options).format(new Date()).replace(",", "");
+        }
+
+        async function validateLogin(event) {
+            event.preventDefault();
+
+            const userInput = document.getElementById("username").value.trim();
+            const userPassword = document.getElementById("password").value.trim();
+            const errorMsg = document.getElementById("error-msg");
+            const successMsg = document.getElementById("success-msg");
+            const heading = document.getElementById("login-title");
+            const leaderboardDiv = document.getElementById("leaderboard");
+
+            errorMsg.innerText = "";
+            successMsg.innerText = "";
+
+            if (!userInput || !userPassword) {
+                errorMsg.innerText = "⚠️ Please fill all fields!";
+                return;
+            }
+
+            const apiUrl = "https://api.baserow.io/api/database/rows/table/444317/?user_field_names=true";
+            const apiKey = "jXXkrUUqrQK3RlESaDPs2gq0Eu0SK4Sw";
+
+            try {
+                const response = await fetch(apiUrl, {
+                    headers: {
+                        "Authorization": `Token ${apiKey}`,
+                        "Content-Type": "application/json"
+                    }
+                });
+
+                if (!response.ok) throw new Error("Invalid Data");
+
+                const data = await response.json();
+                const userData = data.results.find(row => row["ID"] == userInput || row["User"] == userInput);
+
+                if (!userData) {
+                    errorMsg.innerText = "❌ Username not found!";
+                    return;
+                }
+
+                const storedPassword = userData["Oasis"];
+                const registeredDevice = userData["Device"];
+                const userName = userData["Name"];
+                const blockStatus = userData["Block"];
+                const blockMessage = userData["Msg"]; // Get the custom block message
+                const currentDeviceID = await getDeviceID();
+                const currentTime = getIndianTime();
+
+                if (blockStatus === "B") {
+                    errorMsg.innerHTML = `🚫 You are blocked!<br>${blockMessage || "No additional message provided."}`;
+                    return;
+                }
+
+                if (blockStatus !== "A") {
+                    errorMsg.innerText = "❌ Invalid block status!";
+                    return;
+                }
+
+                if (userPassword !== storedPassword) {
+                    errorMsg.innerText = "❌ Incorrect Password!";
+                    return;
+                }
+
+                if (registeredDevice && registeredDevice !== currentDeviceID) {
+                    errorMsg.innerText = "🚫 You cannot log in from a different device!";
+                    leaderboardDiv.style.display = "block";
+                    return;
+                }
+
+                if (!registeredDevice) {
+                    await fetch(`https://api.baserow.io/api/database/rows/table/444317/${userData.id}/?user_field_names=true`, {
+                        method: "PATCH",
+                        headers: {
+                            "Authorization": `Token ${apiKey}`,
+                            "Content-Type": "application/json"
+                        },
+                        body: JSON.stringify({ "Device": currentDeviceID, "Time": currentTime })
+                    });
+                } else {
+                    await fetch(`https://api.baserow.io/api/database/rows/table/444317/${userData.id}/?user_field_names=true`, {
+                        method: "PATCH",
+                        headers: {
+                            "Authorization": `Token ${apiKey}`,
+                            "Content-Type": "application/json"
+                        },
+                        body: JSON.stringify({ "Time": currentTime })
+                    });
+                }
+
+                document.title = `Welcome ${userName}`;
+                heading.innerText = `Welcome ${userName}`;
+
+                successMsg.innerText = "✅ Login Successful! Redirecting...";
+                setTimeout(() => {
+                    localStorage.clear();
+                    sessionStorage.clear();
+                    window.location.href = REDIRECT_URL;
+                }, 2000);
+
+            } catch (error) {
+                errorMsg.innerText = "❌ Error fetching data!";
+            }
+
+            loginAttempts++;
+            localStorage.setItem("login_attempts", loginAttempts);
+
+            if (loginAttempts > 0) {
+                leaderboardDiv.style.display = "block";
+            }
+        }
+
+        window.onload = function () {
+            if (loginAttempts > 0) {
+                document.getElementById("leaderboard").style.display = "block";
+            }
+        };
+    </script>
+</head>
+<body>
+    <div class="login-container">
+        <h2 id="login-title">🔐 Secure Exam Login</h2>
+        <form onsubmit="validateLogin(event)">
+            <label for="username">Username (ID or User)</label>
+            <input type="text" id="username" placeholder="Enter your ID or Username">
+
+            <label for="password">Password (Oasis Column)</label>
+            <input type="password" id="password" placeholder="Enter your password">
+
+            <button type="submit">Login</button>
+            <p id="error-msg" class="error"></p>
+            <p id="success-msg" class="success"></p>
+            <div id="leaderboard" class="leaderboard-link">
+                <p>🏆 <a href="https://www.google.com">Leaderboard</a></p>
+            </div>
+        </form>
+    </div>
+</body>
+</html>
